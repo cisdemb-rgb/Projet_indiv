@@ -145,6 +145,38 @@ def assembler_systemes(etoiles, planetes):
    
     return systemes.reindex(columns=["systeme"] + COLONNES_tous)  # réorganise les colonnes pour correspondre à l'ordre attendu par l'application
 
+def verifier_systemes(df):
+    """
+    Vérifie que le DataFrame des systèmes est conforme aux attentes de l'application.
+
+    Args:
+        df (pd.DataFrame): Un DataFrame avec une ligne par astre (étoile ou planète).
+
+    Raises:
+        ValueError: Si le DataFrame n'est pas conforme.
+    """
+    erreurs = []
+    for nom, astre in df.groupby("systeme"):
+        for erreur in valider_csv(astre.drop(columns=["systeme"], inplace=False)):  # on ne valide pas la colonne "systeme" valider_csv peut pas encore le gerer
+            erreurs.append(f"Système {nom} : {erreur}")
+
+    if erreurs:
+        raise ValueError("Erreurs trouvées dans les systèmes :\n" + "\n".join(erreurs))
+
+def ecrire_systemes(df, chemin):
+    """
+    Écrit le DataFrame des systèmes dans un fichier CSV.
+
+    Args:
+        df (pd.DataFrame): Un DataFrame avec une ligne par astre (étoile ou planète).
+        chemin (str): Chemin vers le fichier de sortie.
+    """
+   
+    try:
+        df.to_csv(chemin, index=False)
+        print(f"Fichier de sortie écrit : {chemin}")
+    except Exception as e:
+        print(f"Erreur lors de l'écriture du fichier : {e}")
 
 if __name__ == "__main__":
   df_naza = lire_fichier_nasa(FICHIER_NASA)
@@ -158,6 +190,6 @@ if __name__ == "__main__":
   planètes = creer_planetes(df_selection)
   systemes = assembler_systemes(etoiles, planètes)
 
-  #print(etoiles)  # test: Affiche les étoiles créées
-  #print(planètes)  # test: Affiche les planètes créées
-  print(systemes)  # test: Affiche les systèmes créés
+
+  verifier_systemes(systemes)
+  ecrire_systemes(systemes, FICHIER_SORTIE) # test: Écrit le fichier de sortie
