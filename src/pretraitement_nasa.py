@@ -7,10 +7,12 @@ convertit au format CSV de l'application.
 """
 import pandas as pd
 import numpy as np
+from src.chargeur_csv import COLONNES_tous, valider_csv
 
 
 # Fichier téléchargé de la NASA Exoplanet Archive (table PSCompPars)
 FICHIER_NASA = "donnees/nasa_exoplanetes.csv"
+FICHIER_SORTIE = "donnees/systemes_nasa.csv"
 
 # Nom de l'étoile dans le fichier de la NASA → nom affiché dans l'application
 SYSTEMES_CHOISIS = {
@@ -126,15 +128,36 @@ def creer_planetes(selection):
         "periode": selection["pl_orbper"],  # période orbitale en jours
         "phase": 0.0,  
     })
+
+def assembler_systemes(etoiles, planetes):
+    """
+    Assemble les étoiles et les planètes dans un seul DataFrame.
+
+    Args:
+        etoiles (pd.DataFrame): Les étoiles des systèmes choisis.
+        planetes (pd.DataFrame): Les planètes des systèmes choisis.
+
+    Returns:
+        pd.DataFrame: Un DataFrame avec une ligne par astre (étoile ou planète).
+    """
+    systemes = pd.concat([etoiles, planetes], ignore_index=True)
+    systemes = systemes.sort_values(by="systeme", kind="stable", ignore_index=True) # tri par système pour que les étoiles apparaissent avant les planètes
+   
+    return systemes.reindex(columns=["systeme"] + COLONNES_tous)  # réorganise les colonnes pour correspondre à l'ordre attendu par l'application
+
+
 if __name__ == "__main__":
   df_naza = lire_fichier_nasa(FICHIER_NASA)
   print(f"Fichier de la NASA lu : {len(df_naza)} planètes trouvées.")
 
   df_selection = selectionner_systemes(df_naza, SYSTEMES_CHOISIS)
-  print(f"Systèmes choisis : {len(df_selection)} planètes conservées.")
-  print(df_selection[["systeme", "pl_name", "hostname"]])  # test: Affiche les colonnes utiles
+  #print(f"Systèmes choisis : {len(df_selection)} planètes conservées.")
+  #print(df_selection[["systeme", "pl_name", "hostname"]])  # test: Affiche les colonnes utiles
   etoiles = creer_etoiles(df_selection) 
  
   planètes = creer_planetes(df_selection)
-  print(etoiles)  # test: Affiche les étoiles créées
-  print(planètes)  # test: Affiche les planètes créées
+  systemes = assembler_systemes(etoiles, planètes)
+
+  #print(etoiles)  # test: Affiche les étoiles créées
+  #print(planètes)  # test: Affiche les planètes créées
+  print(systemes)  # test: Affiche les systèmes créés
