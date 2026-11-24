@@ -22,6 +22,41 @@ def resource_path(relative_path):
 
     return os.path.join(base_path, relative_path)
 
+def lister_systemes(fichier):
+    """
+    Retourne la liste des systèmes présents dans le DataFrame.
+
+    Args:
+        df (pd.DataFrame): Données lues par lire_csv.
+
+    Returns:
+        list[str]: Liste des systèmes.
+    """
+    df = lire_csv(fichier)
+    if "systeme" not in df.columns:
+        raise ValueError(f"le fichier {fichier} ne contient pas la colonne 'systeme'.") 
+    
+    return df["systeme"].dropna().unique().tolist() # unique() retourne les valeurs uniques de la colonne "systeme" et tolist() les transforme en liste Python.
+
+def filtrer_systemes(df, systemes):
+    """
+    Filtre le DataFrame pour ne garder que les astres des systèmes spécifiés.
+
+    Args:
+        df (pd.DataFrame): Données lues par lire_csv.
+        systemes (list[str]): Liste des systèmes à conserver.
+
+    Returns:
+        pd.DataFrame: Un DataFrame filtré.
+    """
+    if "systeme" not in df.columns:
+        raise ValueError(f"le DataFrame ne contient pas la colonne 'systeme'.")
+    df=df[df["systeme"] == (systemes)]
+    if df.empty:
+        raise ValueError(f"Aucun astre trouvé pour les systèmes spécifiés : {systemes}")
+    return df.drop(columns=["systeme"])  
+
+
 def lire_csv(fichier):
     """
     Lit un fichier CSV et regarder si on a des lignes complètement vides pour les enlever.
@@ -102,16 +137,19 @@ def corriger_couleurs(df):
     return df
 
 
-def charger_csv(fichier):
+def charger_csv(fichier, systemes=None):
     """
     Charge un fichier CSV, le vérifie et crée les objets de la simulation.
     Args:
         fichier (str): Chemin vers le fichier CSV.
+        systemes (list[str], optional): Liste des systèmes à charger. Si None, tous les systèmes sont chargés.
     Returns:
         tuple: (liste des AstreFixe, liste des Projectile).
 
     """
     df = lire_csv(fichier)
+    if systemes is not None:
+        df = filtrer_systemes(df, systemes)
     erreurs = valider_csv(df)
 
     if erreurs:

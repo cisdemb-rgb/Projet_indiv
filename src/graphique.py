@@ -18,13 +18,13 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
 from src.astre import Astre, AstreFixe
-from src.chargeur_csv import couleur_aleatoire, sauvegarder, os
+from src.chargeur_csv import couleur_aleatoire, sauvegarder,lister_systemes, os
 from src.projectile import Projectile
 from src.simulation import Simulation
 from src.exceptions import DebutHistorique, FinHistorique
 
 FOND = "#0f1424"   # bleu nuit derrière les astres
-
+FICHIER_SYSTEMES = "donnees/systemes_nasa.csv"  # fichier CSV de la NASA prétraité, avec les colonnes attendues par l'application
 
 def texte(master, contenu: str, taille: int = 13, gras: bool = False) -> ctk.CTkLabel:
     """
@@ -76,12 +76,23 @@ class BarreHaut(ctk.CTkFrame):
     CTkFrame (cadre qui regroupe des widgets) : https://customtkinter.tomschimansky.com/documentation/widgets/frame
     """
 
-    def __init__(self, master, ouvrir=None, enregistrer=None, lancer=None, **kwargs):
+    def __init__(self, master, ouvrir=None, enregistrer=None, lancer=None, systemes=(),charger_systeme=None, **kwargs):
         super().__init__(master, **kwargs)
         self.info = texte(self, "Aucun fichier")
+        # Demba : liste deroulante des systemes de la NASA
+        self.choix_systeme = ctk.CTkComboBox(self, values=list(systemes) or ["Aucun système"], state="readonly")
+        self.choix_systeme.set(list(systemes) or ["Aucun système"][0]) # set choisit l'élément affiché
+        bouton_systeme = bouton(self, "Charger le système", charger_systeme)
+        if not systemes:
+            self.choix_systeme.configure(state="disabled")
+            bouton_systeme.configure(state="disabled")
+
         ligne_de_widgets([bouton(self, "Ouvrir un CSV…", ouvrir),
                           bouton(self, "Enregistrer…", enregistrer),
                           bouton(self, "Lancer un projectile…", lancer),
+                          texte(self, "Systèmes NASA :"),
+                          self.choix_systeme,
+                          bouton_systeme,
                           self.info])
 
     def afficher_fichier(self, nom: str, nb_astres: int, nb_projectiles: int):
@@ -195,7 +206,7 @@ class VueGraphique(ctk.CTkFrame):
         actifs = [objet for objet in list(astres) + list(projectiles) if objet.actif]
 
         # Vue carrée qui contient l'astre le plus loin (+10 %)
-        limite = 1.1 * max([np.linalg.norm(objet.position(t)) for objet in actifs if isinstance(objet, AstreFixe)] + [1])
+        limite = 1.1 * max([np.linalg.norm(objet.position(t)) for objet in actifs if isinstance(objet, AstreFixe)] + [0.01])
 
         # Axes.set : https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.set.html
         ax.set(xlim=(-limite, limite), ylim=(-limite, limite), aspect="equal", facecolor=FOND,
@@ -443,8 +454,16 @@ class FenetreSimulateur(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self.quit)  # NE PAS ENLEVER : ferme proprement la fenêtre
 
         self.simulateur = Simulation()
+
+        # Demba : nom des systèmes de la NASA dans la barre du haut
+        try:
+            systemes = lister_systemes(FICHIER_SYSTEMES)
+        except (OSError, ValueError):
+            systemes = []
         self.barre_haut = BarreHaut(self, ouvrir=self.ouvrir_csv, enregistrer=self.enregistrer_csv,
-                                    lancer=lambda: FormulaireProjectile(self, self.lancer_projectile))
+                                    lancer=lambda: FormulaireProjectile(self, self.lancer_projectile), systemes=systemes, charger_systeme=self.charger_systeme)
+
+        
         self.gestionnaire = GestionnaireObjets(self)
         self.vue = VueGraphique(self)
         self.details = DetailsProjectile(self, exporter=self.exporter_trajectoire)
@@ -500,17 +519,29 @@ class FenetreSimulateur(ctk.CTk):
             self.cache["nom_fichier"] = nom_fichier
             self.cache["t"] = t
 
-    def charger(self, chemin: str):
+    def charger(self, chemin: str, systeme: str = None):
         """
         Charge un CSV dans la simulation, calcule les trajectoires puis affiche le tout à t = 0.
 
         :param chemin: Chemin du fichier CSV
+        :param systeme: Nom du système à charger
         """
-        self.simulateur.importer(chemin)
+        self.simulateur.importer(chemin, systeme)
         self.simulateur.recalculer()
         # os.path.basename garde seulement le nom du fichier : https://docs.python.org/3/library/os.path.html
-        self.afficher(*self.simulateur.astres_et_projectiles, os.path.basename(chemin))
+        nom_affichage = systeme if systeme else os.path.basename(chemin)
+        self.afficher(*self.simulateur.astres_et_projectiles, nom_affichage)
         self.barre_controle.t = 0
+
+    def charger_systeme(self):
+        """demba: Charge le système choisi dans la liste déroulante."""
+        systeme = self.barre_haut.choix_systeme.get() #get le nom du système choisi dans la liste déroulante
+
+            
+        try:
+            self.charger(FICHIER_SYSTEMES, systeme)
+        except (OSError, KeyError, ValueError) as erreur:
+            messagebox.showerror("Le chargement a échoué !", str(erreur), parent=self)
 
     def ouvrir_csv(self):
         """Demande un fichier CSV et le charge dans la simulation."""

@@ -45,7 +45,8 @@ class Simulation:
                           f"Portez attention aux valeurs de vit0_x et vit0_y, elles sont en UA/jour.")
                     projectile.etat = "hors systeme"
 
-    def importer(self, fichier):
-        astres, projectiles = charger_csv(fichier)
+    def importer(self, fichier, systemes=None):
+        
+        astres, projectiles = charger_csv(fichier, systemes)
         self.astres = astres.copy()
         self.projectiles = projectiles.copy()
