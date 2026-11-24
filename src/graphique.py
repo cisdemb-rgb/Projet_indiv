@@ -81,7 +81,7 @@ class BarreHaut(ctk.CTkFrame):
         self.info = texte(self, "Aucun fichier")
         # Demba : liste deroulante des systemes de la NASA
         self.choix_systeme = ctk.CTkComboBox(self, values=list(systemes) or ["Aucun système"], state="readonly")
-        self.choix_systeme.set(list(systemes) or ["Aucun système"][0]) # set choisit l'élément affiché
+        self.choix_systeme.set((list(systemes) or ["Aucun système"])[0]) # set choisit l'élément affiché
         bouton_systeme = bouton(self, "Charger le système", charger_systeme)
         if not systemes:
             self.choix_systeme.configure(state="disabled")
