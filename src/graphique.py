@@ -271,39 +271,85 @@ class VueGraphique(ctk.CTkFrame):
         self.canvas.draw_idle()  # redessine la figure dans la fenêtre dès que possible
 
 
-class DetailsProjectile(ctk.CTkFrame):
+class DetailsObjet(ctk.CTkFrame):
     """
-    Panneau de droite : choix d'un projectile, ses informations et le bouton d'export.
+    Panneau de droite(vertion Demba) :choix d'un astre ou d'un projectile, ses informations,
+    le bouton « Modifier… » et le bouton d'export de trajectoire.
     """
 
-    INFOS = ("État", "Cible", "Position (UA)", "Vitesse (UA/j)", "Masse (MT)")
+    INFOS = ("Type", "Masse (MT)", "Taille", "Distance (UA)", "Période (jours)", "État")
 
-    def __init__(self, master, exporter=None):
+    def __init__(self, master, exporter=None, modifier=None):
         super().__init__(master)
+        self.objets = {} # nom -> objet (Astre ou Projectile)
 
-        texte(self, "Projectile", 18, True).grid(row=0, column=0, columnspan=2, padx=12, pady=8, sticky="w")
+        texte(self, "Détails", 18, True).grid(row=0, column=0, columnspan=2, padx=12, pady=8, sticky="w")
 
         # CTkComboBox (liste déroulante) : https://customtkinter.tomschimansky.com/documentation/widgets/combobox
-        self.choix = ctk.CTkComboBox(self, values=["Aucun projectile"], state="readonly")
+        self.choix = ctk.CTkComboBox(self, values=["Aucun objet"], state="readonly", command=self.montrer) # command=self.montrer: 
         self.choix.grid(row=1, column=0, columnspan=2, padx=12, sticky="ew")
+
         self.valeurs = {}  # libellé -> étiquette où écrire la valeur
         for ligne, nom in enumerate(self.INFOS, start=2):
             texte(self, nom).grid(row=ligne, column=0, padx=12, pady=3, sticky="w")
             self.valeurs[nom] = texte(self, "—")
             self.valeurs[nom].grid(row=ligne, column=1, padx=12, sticky="w")
 
+        derniere = len(self.INFOS) + 2
+        bouton(self, "Modifier…", modifier).grid(row=derniere, column=0, columnspan=2, padx=12, pady=(12, 4))
         bouton(self, "Exporter la trajectoire…", exporter
-               ).grid(row=len(self.INFOS) + 2, column=0, columnspan=2, padx=12, pady=12)
+               ).grid(row=derniere + 1, column=0, columnspan=2, padx=12, pady=4)
 
-    def afficher(self, noms=(), infos=None):
-        # Remplit la liste des projectiles et les valeurs (« — » si une valeur manque).
-        noms = list(noms) or ["Aucun projectile"]
+    def afficher(self, astres=(), projectiles=(), infos=None):
+        """
+        Remplit la liste avec tous les objets et montre les informations de l'objet choisi
+        et les valeurs (« — » si une valeur manque)
+
+        : astres: Les AstreFixe de la simulation
+        : projectiles: Les Projectile de la simulation
+          #Remplit la liste des projectiles .
+        """
+        self.objets = {objet.nom: objet for objet in astres + projectiles}
+        noms = list(self.objets) or ["Aucun objet"]
         self.choix.configure(values=noms)
-        self.choix.set(noms[0])  # set choisit l'élément affiché
-        for nom, etiquette in self.valeurs.items():
-            etiquette.configure(text=str((infos or {}).get(nom, "—")))
+        if self.choix.get() not in self.objets: #On garde l'objet choisi s'il existe encore
+            self.choix.set(noms[0])  
+        self.montrer(self.choix.get()) 
 
+        #for nom, etiquette in self.valeurs.items():
+        #    etiquette.configure(text=str((infos or {}).get(nom, "—")))
+    
+    def montrer(self, nom: str):
+        """
+        Affiche les informations de l'objet nommé (« — » quand une valeur ne s'applique pas).
 
+        :param nom: Nom de l'objet choisi dans la liste
+        """
+        objet = self.objets.get(nom)
+        infos = {}
+        if isinstance(objet, AstreFixe):
+            infos = {
+                "Type": "Astre",
+                     "Distance (UA)": f"{objet.distance:.4g}", # .4g : 4 chiffres significatifs, https://docs.python.org/3/library/string.html#format-specification-mini-language
+                     "Période (jours)": f"{objet.periode:.4g}",
+                     "État": "actif" if objet.actif else "inactif"}
+        elif isinstance(objet, Projectile):
+            infos = {
+                    "Type": "Projectile",
+                     "Distance (UA)": f"{np.linalg.norm(objet.pos0):.4g}",  # distance au centre au départ
+                     "État": objet.etat}
+
+        if objet is not None:
+            infos["Masse (MT)"] = f"{objet.masse:.4g}"
+            infos["Taille"] = f"{objet.taille:.4g}"
+
+        for libelle, etiquette in self.valeurs.items():
+            etiquette.configure(text=infos.get(libelle, "—"))
+
+    def objet_choisi(self):
+        """Renvoie l'objet actuellement choisi dans la liste déroulante, ou None si aucun."""
+        return self.objets.get(self.choix.get())
+    
 class BarreControle(ctk.CTkFrame):
     """
     Barre du bas : réinitialiser, reculer, jouer, arrêter, avancer, le pas dt et le temps actuel.
@@ -466,7 +512,7 @@ class FenetreSimulateur(ctk.CTk):
         
         self.gestionnaire = GestionnaireObjets(self)
         self.vue = VueGraphique(self)
-        self.details = DetailsProjectile(self, exporter=self.exporter_trajectoire)
+        self.details = DetailsObjet(self, exporter=self.exporter_trajectoire)
         self.barre_controle = BarreControle(self)
 
         # sticky="nsew" : le panneau s'étire dans sa case ; columnspan=3 : la barre prend les 3 colonnes
@@ -509,8 +555,7 @@ class FenetreSimulateur(ctk.CTk):
             self.barre_haut.afficher_fichier(nom_fichier, len(astres), len(projectiles))
             self.gestionnaire.afficher(astres, projectiles)
             self.vue.dessiner(astres, projectiles, t)
-            infos = {"État": projectiles[0].etat, "Masse (MT)": f"{projectiles[0].masse:g}"} if projectiles else None
-            self.details.afficher([projectile.nom for projectile in projectiles], infos)
+            self.details.afficher(astres, projectiles)  # Demba : tous les objets, pas seulement les projectiles
             self.barre_controle.afficher_temps(t)
 
             # Cache
