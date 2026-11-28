@@ -486,6 +486,46 @@ class FormulaireProjectile(ctk.CTkToplevel):
         else:
             self.destroy()
 
+class FormulaireMasse(ctk.CTkToplevel):
+    """
+    Fenêtre « Modifier la Masse » Demba : on saisit la nouvelle masse de l'objet. le projectile part au temps actuel.
+    c'est construit sur le même modèle que FormulaireProjectile.
+
+    CTkToplevel (fenêtre secondaire) : https://customtkinter.tomschimansky.com/documentation/windows/toplevel
+    """
+
+
+
+    def __init__(self, master, objet:Astre , modifier):
+        super().__init__(master)
+        self.title("Modifier la Masse")
+        self.objet = objet  # objet dont on veut modifier la masse
+        self.modifier = modifier  # fonction qui reçoit le nom et la nouvelle masse, et
+        
+        #self.entrees = {}
+        #for ligne, (cle, libelle, defaut) in enumerate(self.CHAMPS): pas pour le moment on ne modifie que la masse
+        
+        texte(self, objet.nom,16,True).grid(row=0, column=0, padx=12, pady=3, sticky="w")
+        texte(self, "Masse (MT)").grid(row=1, column=0, padx=12, pady=3, sticky="w")
+        self.entrees_masse = ctk.CTkEntry(self, width=160)
+        self.entrees_masse.insert(0, str(objet.masse))
+        self.entrees_masse.grid(row=1, column=1, padx=12, pady=3)
+        
+        self.erreur = ctk.CTkLabel(self, text="", text_color="#FF6B6B", wraplength=300)
+        
+        self.erreur.grid(row=2, column=0, columnspan=2, padx=12)
+        
+        bouton(self, "Appliquer", self.valider).grid(row=3, column=0, columnspan=2, pady=10) #
+        
+        self.after(100, self.grab_set)  # garde clavier et souris sur le formulaire une fois affiché
+
+    def valider(self):
+        """Envoie la masse saisie ; ferme la fenêtre si elle est acceptée, sinon affiche l'erreur."""
+        erreur = self.modifier(self.objet, self.entrees_masse.get())
+        if erreur:
+            self.erreur.configure(text=erreur)
+        else:
+            self.destroy()
 
 class FenetreSimulateur(ctk.CTk):
     """
@@ -512,7 +552,8 @@ class FenetreSimulateur(ctk.CTk):
         
         self.gestionnaire = GestionnaireObjets(self)
         self.vue = VueGraphique(self)
-        self.details = DetailsObjet(self, exporter=self.exporter_trajectoire)
+       # demba : exporter,modifier la trajectoire du projectile choisi
+        self.details = DetailsObjet(self, exporter=self.exporter_trajectoire, modifier= self.ouvrir_modification) 
         self.barre_controle = BarreControle(self)
 
         # sticky="nsew" : le panneau s'étire dans sa case ; columnspan=3 : la barre prend les 3 colonnes
@@ -636,6 +677,35 @@ class FenetreSimulateur(ctk.CTk):
         self.afficher(*self.simulateur.astres_et_projectiles, self.cache["nom_fichier"], self.barre_controle.t)
         return None
 
+    def ouvrir_modification(self):
+        """ Demba: Ouvre le formulaire de modification de la masse pour l'objet choisi."""
+        objet = self.details.objet_choisi()
+        if objet is None:
+            messagebox.showinfo("Modifier", "Aucun objet choisi: ouvrez un fichier CSV contenant des astres.", parent=self)
+            return
+        FormulaireMasse(self, objet, self.modifier_masse)
+
+    def modifier_masse(self, objet:Astre, saisie:str):
+        """
+        Demba : vérifie la masse saisie, l'applique à l'objet puis recalcule les trajectoires.
+
+        :param objet: L'astre ou le projectile à modifier
+        :param saisie: Le texte écrit dans le champ « Masse »
+        :return: Un message d'erreur, ou None si la masse a été modifiée
+        """
+        try:
+            masse = float(saisie.replace(",", "."))
+        except ValueError:
+            return "La masse doit être un nombre."
+        if not np.isfinite(masse):
+            return "La masse doit être un nombre fini."
+        if masse <= 0:
+            return "La masse doit être strictement positive."
+        objet.masse = masse
+        self.simulateur.recalculer() # Recalculer les trajectoires comme la masse a changé et affecte la gravité
+        self.afficher(*self.simulateur.astres_et_projectiles, self.cache["nom_fichier"], self.barre_controle.t)
+        return None
+    
     def exporter_trajectoire(self):
         """Écrit la trajectoire du projectile choisi dans un CSV : une ligne par jour (t, x, y, vx, vy)."""
         nom = self.details.choix.get()
